@@ -1,0 +1,4 @@
+sodapy
+pandas
+pymongo[srv]
+dotenv
