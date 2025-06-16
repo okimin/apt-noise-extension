@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYC Address Validator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 350px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .input-container {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+        }
+
+        .input-field::placeholder {
+            color: #666;
+        }
+
+        .validate-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .validate-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .validate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result-container {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .suggestion-dialog {
+            background: rgba(255, 193, 7, 0.9);
+            color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .suggestion-text {
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .suggested-address {
+            font-weight: 600;
+            margin: 5px 0;
+        }
+
+        .suggestion-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-yes, .btn-no {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-yes {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-yes:hover {
+            background: #218838;
+        }
+
+        .btn-no {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-no:hover {
+            background: #c82333;
+        }
+
+        .success-result {
+            color: #28a745;
+        }
+
+        .error-result {
+            color: #dc3545;
+        }
+
+        .address-info {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .borough-badge {
+            display: inline-block;
+            background: rgba(40, 167, 69, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .show-map-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: #007bff;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .show-map-btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>NYC Address Validator</h1>
+        <p>Validate addresses in the five boroughs</p>
+    </div>
+
+    <div class="input-container">
+        <input 
+            type="text" 
+            id="addressInput" 
+            class="input-field" 
+            placeholder="Enter a New York City address..."
+            autocomplete="off"
+        >
+    </div>
+
+    <button id="validateBtn" class="validate-btn">
+        Validate Address
+    </button>
+
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <span>Validating address...</span>
+    </div>
+
+    <div id="suggestionDialog" class="suggestion-dialog" style="display: none;">
+        <div class="suggestion-text">Did you mean this address?</div>
+        <div id="suggestedAddress" class="suggested-address"></div>
+        <div class="suggestion-buttons">
+            <button id="btnYes" class="btn-yes">Yes, use this</button>
+            <button id="btnNo" class="btn-no">No, try again</button>
+        </div>
+    </div>
+
+    <div id="resultContainer" class="result-container">
+        <div id="resultContent"></div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
