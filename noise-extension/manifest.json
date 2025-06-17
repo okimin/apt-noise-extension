@@ -31,14 +31,15 @@
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type":"module"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' https://maps.googleapis.com data:; connect-src 'self' https://maps.googleapis.com;"
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": ["icons/*", "config.js"],
       "matches": ["<all_urls>"]
     }
   ],

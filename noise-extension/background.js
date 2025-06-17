@@ -1,8 +1,11 @@
+import { CONFIG } from './config.js';
 
 class NYCAddressValidator {
     constructor() {
         // You would store your Google Maps API key in chrome.storage or as a constant
-        this.GOOGLE_MAPS_API_KEY = "AIzaSyByUB9FSz_DqjFrsG41Vrfsh90GnDjn6l0"; // Replace with actual key
+        this.GOOGLE_MAPS_API_KEY = null;
+        this.initializeApiKey();
+         
         this.NYC_BOROUGHS = [
             {
                 name: 'Manhattan',
@@ -25,6 +28,36 @@ class NYCAddressValidator {
                 bounds: { north: 40.6514, south: 40.4960, east: -74.0340, west: -74.2591 }
             }
         ];
+    }
+
+
+     async initializeApiKey() {
+        try {
+      // First, try to get API key from chrome storage (e.g., if user set it or it was saved before)
+            const result = await chrome.storage.sync.get(['googleMapsApiKey']);
+            
+            if (result.googleMapsApiKey) {
+                this.GOOGLE_MAPS_API_KEY = result.googleMapsApiKey;
+                console.log('API key loaded from storage.');
+                return;
+            }
+
+            // Fallback: Use the key from the local config.js file (developer's key)
+            // This assumes config.js is properly excluded from version control for security.
+            if (CONFIG && CONFIG.GOOGLE_MAPS_API_KEY && CONFIG.GOOGLE_MAPS_API_KEY !== "YOUR_API_KEY_HERE") {
+                this.GOOGLE_MAPS_API_KEY = CONFIG.GOOGLE_MAPS_API_KEY;
+                
+                // Optionally store in chrome storage for future use to avoid repeated config file checks
+                await chrome.storage.sync.set({ googleMapsApiKey: this.GOOGLE_MAPS_API_KEY });
+                console.log('API key loaded from config file and stored for future use.');
+            } else {
+                console.warn('API key not found in storage and not properly set in config.js. Please update config.js or extension options.');
+                // You might want to throw an error or disable functionality if key is missing
+            }
+            
+        } catch (error) {
+            console.error('Failed to initialize API key:', error);
+        }
     }
 
     async validateAddress(inputAddress) {
