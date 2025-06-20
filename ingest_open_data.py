@@ -20,15 +20,16 @@ results = client.get(dataset_id, **soql)
 df = pd.DataFrame.from_records(results)
 data_to_insert = df.to_dict(orient='records')
 
-critical_fields = ['longitude','latitude','location']
+critical_fields = ['longitude','latitude']
 
 cleaned_data_to_insert = []
+checkedForLocation = False
 for record in data_to_insert:
     skip_document = False
     for field in critical_fields:
         # Get the value from the record. Handle potential missing keys in the record itself
         # though pandas `to_dict(orient='records')` usually ensures all DataFrame columns are keys.
-        value = record.get(field) 
+        value = record.get(field)
         
         if pd.isna(value) or value is None:
             # If a critical field is null or NaN, mark the document for skipping
@@ -37,7 +38,7 @@ for record in data_to_insert:
     
     if skip_document:
         continue # Move to the next document in data_to_insert
-    
+    record["location"] = {"longitude" :  record.get("longitude"), "latitude" : record.get("latitude")}
     cleaned_data_to_insert.append(record)
 
 mongo_uri = os.environ.get("db_uri")
@@ -51,7 +52,10 @@ except :
 
 collection = db.Complaints
 
-try : 
+try :
+    result = collection.delete_many({}) # Clear out previous data
+    print(f"Deleted {result.deleted_count} documents.")
+
     result = collection.insert_many(cleaned_data_to_insert)
     print(f"Successfully inserted {len(result.inserted_ids)} documents into 'nypd_complaints' collection.")
 except :
