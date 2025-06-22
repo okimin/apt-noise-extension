@@ -38,7 +38,9 @@ for record in data_to_insert:
     
     if skip_document:
         continue # Move to the next document in data_to_insert
-    record["location"] = {"longitude" :  record.get("longitude"), "latitude" : record.get("latitude")}
+    record["latitude"] = float(record.get("latitude"))
+    record["longitude"] = float(record.get("longitude"))
+    record["location"] = {"type" : "Point" , "coordinates":[record["longitude"],record["latitude"]]}
     cleaned_data_to_insert.append(record)
 
 mongo_uri = os.environ.get("db_uri")
