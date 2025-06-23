@@ -23,20 +23,20 @@ public class MongoConfig {
         // Check if 2dsphere index already exists
         List<IndexInfo> indexes = indexOps.getIndexInfo();
         boolean geoIndexExists = indexes.stream()
-                .anyMatch(index -> index.getName().contains("geoLocation"));
+                .anyMatch(index -> index.getName().contains("location_2dsphere")); // Check for the correct index name
 
         if (!geoIndexExists) {
             // Create 2dsphere index for geospatial queries
-            indexOps.createIndex(new GeospatialIndex("geoLocation"));
-            System.out.println("Created 2dsphere index on geoLocation field");
+            indexOps.createIndex(new GeospatialIndex("location")); // Change this line
+            System.out.println("Created 2dsphere index on location field");
         } else {
-            System.out.println("Geospatial index already exists on geoLocation field");
+            System.out.println("Geospatial index already exists on location field");
         }
 
         // You can also create compound indexes for better performance
         // For example, if you frequently query by complaint type and location:
         // indexOps.ensureIndex(new CompoundIndexDefinition(
-        //     new Document("complaint_type", 1).append("geoLocation", "2dsphere")
+        //     new Document("complaint_type", 1).append("location", "2dsphere") // And this line if using compound
         // ));
     }
 }

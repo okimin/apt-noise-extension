@@ -22,11 +22,7 @@ public class ComplaintService {
         Point center = new Point(longitude, latitude);
         Distance distance = new Distance(distanceInKm, Metrics.KILOMETERS); // Or Metrics.MILES, etc.
 
-        GeoResults<Complaints> results = complaintsRepository.findByLocationNear(center, distance);
-
-        // Extract MyLocation objects from GeoResults
-        return results.getContent().stream()
-                .map(GeoResult::getContent)
-                .collect(Collectors.toList());
+        List<Complaints> results = complaintsRepository.findByLocationNear(center, distance);
+        return results;
     }
 }
