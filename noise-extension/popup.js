@@ -1,7 +1,5 @@
 // popup.js - Main popup script for NYC Address Validator
 
-// popup.js - Main popup script for NYC Address Validator
-
 class PopupController {
     constructor() {
         this.addressInput = document.getElementById('addressInput');
@@ -208,8 +206,26 @@ class PopupController {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    async fetchComplaints(latitude, longitude) {
+        const distanceInKm = 1; 
+        const apiUrl = `http://localhost:8080/api/near?lon=${longitude}&lat=${latitude}&distanceInKm=${distanceInKm}`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status} ${latitude} ${longitude}`);
+            }
+            const complaints = await response.json();
+            return complaints;
+        } catch (error) {
+            console.error('Error fetching complaints:', error);
+            return []; 
+        }
+    }
+
     async showLocationOnMap(result) {
         try {
+            const complaints = await this.fetchComplaints(result.coordinates.lat, result.coordinates.lng);
+
             // Get the active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
@@ -233,7 +249,7 @@ class PopupController {
 
             // Send message to content script with retry logic
             let attempts = 0;
-            const maxAttempts = 3;
+            const maxAttempts = 5;
             
             while (attempts < maxAttempts) {
                 try {
@@ -243,6 +259,7 @@ class PopupController {
                             address: result.formattedAddress,
                             coordinates: result.coordinates,
                             borough: result.borough
+                            ,complaints : complaints
                         }
                     });
 

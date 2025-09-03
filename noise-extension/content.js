@@ -35,16 +35,16 @@ class MapOverlay {
         this.overlay = document.createElement('div');
         this.overlay.id = 'nyc-address-validator-overlay';
         this.overlay.innerHTML = this.getOverlayHTML(data);
-        
+
         // Add to page
         document.body.appendChild(this.overlay);
-        
+
         // Initialize map - use static map instead of interactive due to CSP restrictions
-        this.initializeStaticMap(data.coordinates);
-        
+        this.initializeStaticMap(data.coordinates, data.complaints);
+
         // Add event listeners
         this.addOverlayEventListeners();
-        
+
         // Prevent body scrolling
         document.body.style.overflow = 'hidden';
     }
@@ -76,6 +76,21 @@ class MapOverlay {
                             </div>
                         </div>
                     </div>
+                    <div class="complaints-list-container">
+                    <h3>Nearby Complaints</h3>
+                    <ul class="complaints-list">
+                        ${data.complaints.length > 0 ?
+                data.complaints.slice(0,10).map(complaint => `
+                                <li>
+                                    <strong>Type:</strong> ${complaint.complaintType} <br>
+                                    <strong>Date:</strong> ${new Date(complaint.createdDate).toLocaleDateString()} <br>
+                                    <strong>Address:</strong> ${complaint.incidentAddress || 'N/A'}, ${complaint.city || 'N/A'}
+                                </li>
+                            `).join('')
+                : '<li>No nearby complaints found within 1 km.</li>'
+            }
+                    </ul>
+                </div>
                     <div class="overlay-actions">
                         <button class="action-btn" id="getDirections">
                             🗺️ Get Directions
@@ -92,15 +107,32 @@ class MapOverlay {
         `;
     }
 
-    async initializeStaticMap(coordinates) {
+    async initializeStaticMap(coordinates, complaints = []) {
         try {
             // Get Google Maps API key from background script
             const response = await chrome.runtime.sendMessage({ action: 'getApiKey' });
             const apiKey = response.apiKey;
+            console.log(coordinates)
+            console.log(complaints[0])
+
+            let markers = `&markers=color:blue|label:A|${coordinates.lat},${coordinates.lng}`;
+
+            // Add markers for complaints
+            for(let x = 0; x < complaints.length; x++){
+                if(complaints[x].latitude && complaints.longitude){
+                    markers += `&markers=color:red|label:${x + 1}|${complaints[x].latitude},${complaints.longitude}`;
+                }
+            }
+            // complaints.forEach((complaint, index) => {
+            //     if (complaint.latitude && complaint.longitude) {
+            //         // Using a different color and a numerical label for complaints
+            //         markers += `&markers=color:red|label:${index + 1}|${complaint.latitude},${complaint.longitude}`;
+            //     }
+            // });
 
             // Create static map URL with custom marker
-            const mapUrl = this.createStaticMapUrl(coordinates, apiKey);
-            
+            const mapUrl = this.createStaticMapUrl(coordinates, markers, apiKey);
+
             // Create map image element
             const mapElement = document.getElementById('map');
             const mapImg = document.createElement('img');
@@ -114,30 +146,30 @@ class MapOverlay {
                 cursor: pointer;
                 transition: transform 0.2s ease;
             `;
-            
+
             // Add hover effect
             mapImg.addEventListener('mouseenter', () => {
                 mapImg.style.transform = 'scale(1.02)';
             });
-            
+
             mapImg.addEventListener('mouseleave', () => {
                 mapImg.style.transform = 'scale(1)';
             });
-            
+
             // Click to open in Google Maps
             mapImg.addEventListener('click', () => {
                 this.openInGoogleMaps(coordinates);
             });
-            
+
             // Handle image load
             mapImg.addEventListener('load', () => {
                 mapElement.innerHTML = '';
                 mapElement.appendChild(mapImg);
-                
+
                 // Add overlay controls
                 this.addMapOverlayControls(mapElement, coordinates);
             });
-            
+
             // Handle image error
             mapImg.addEventListener('error', () => {
                 this.showMapError(mapElement);
@@ -156,11 +188,11 @@ class MapOverlay {
             zoom: '16',
             size: '400x300',
             maptype: 'roadmap',
-            markers: `color:red|size:mid|${coordinates.lat},${coordinates.lng}`,
+            markers,
             style: 'feature:poi|visibility:simplified',
             key: apiKey
         });
-        
+
         return `${baseUrl}?${params.toString()}`;
     }
 
@@ -178,9 +210,9 @@ class MapOverlay {
                 <button class="view-btn" id="roadmapView">🗺️</button>
             </div>
         `;
-        
+
         mapElement.appendChild(controlsDiv);
-        
+
         // Add event listeners for controls
         this.addMapControlListeners(coordinates);
     }
@@ -189,25 +221,25 @@ class MapOverlay {
         const mapElement = document.getElementById('map');
         let currentZoom = 16;
         let currentMapType = 'roadmap';
-        
+
         // Zoom in
         document.getElementById('zoomIn')?.addEventListener('click', async () => {
             currentZoom = Math.min(currentZoom + 2, 20);
             await this.updateStaticMap(coordinates, currentZoom, currentMapType);
         });
-        
+
         // Zoom out
         document.getElementById('zoomOut')?.addEventListener('click', async () => {
             currentZoom = Math.max(currentZoom - 2, 10);
             await this.updateStaticMap(coordinates, currentZoom, currentMapType);
         });
-        
+
         // Satellite view
         document.getElementById('satelliteView')?.addEventListener('click', async () => {
             currentMapType = 'satellite';
             await this.updateStaticMap(coordinates, currentZoom, currentMapType);
         });
-        
+
         // Roadmap view
         document.getElementById('roadmapView')?.addEventListener('click', async () => {
             currentMapType = 'roadmap';
@@ -219,7 +251,7 @@ class MapOverlay {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getApiKey' });
             const apiKey = response.apiKey;
-            
+
             const baseUrl = 'https://maps.googleapis.com/maps/api/staticmap';
             const params = new URLSearchParams({
                 center: `${coordinates.lat},${coordinates.lng}`,
@@ -229,26 +261,26 @@ class MapOverlay {
                 markers: `color:red|size:mid|${coordinates.lat},${coordinates.lng}`,
                 key: apiKey
             });
-            
+
             const mapUrl = `${baseUrl}?${params.toString()}`;
             const mapElement = document.getElementById('map');
             const imgElement = mapElement.querySelector('img');
-            
+
             if (imgElement) {
                 // Show loading state
                 imgElement.style.opacity = '0.5';
-                
+
                 // Create new image
                 const newImg = document.createElement('img');
                 newImg.src = mapUrl;
                 newImg.alt = 'Map showing address location';
                 newImg.style.cssText = imgElement.style.cssText;
-                
+
                 newImg.addEventListener('load', () => {
                     imgElement.src = mapUrl;
                     imgElement.style.opacity = '1';
                 });
-                
+
                 newImg.addEventListener('error', () => {
                     imgElement.style.opacity = '1';
                     console.error('Failed to update map');
@@ -333,14 +365,14 @@ class MapOverlay {
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
+
         try {
             document.execCommand('copy');
             this.showCopyConfirmation();
         } catch (err) {
             console.error('Fallback copy failed:', err);
         }
-        
+
         document.body.removeChild(textArea);
     }
 
@@ -349,7 +381,7 @@ class MapOverlay {
         const originalText = button.textContent;
         button.textContent = '✓ Copied!';
         button.style.background = '#28a745';
-        
+
         setTimeout(() => {
             button.textContent = originalText;
             button.style.background = '';
