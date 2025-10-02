@@ -10,7 +10,7 @@ client = Socrata("data.cityofnewyork.us", "cF393sxKJybQh4OCshjnoO0Bc")
 dataset_id = "erm2-nwe9"
 
 soql = {
-    "$select": "unique_key, created_date, complaint_type, location_type, descriptor, incident_zip, incident_address, city, borough, latitude, longitude, location",
+    "$select": "unique_key, created_date, complaint_type, location_type, descriptor, incident_zip, incident_address, city, borough, latitude, longitude",
     "$where": "created_date >= '2024-06-01T00:00:00' ",
     "$limit": 50000 # Always include a limit, even with filters
 }
@@ -48,21 +48,38 @@ mongo_uri = os.environ.get("db_uri")
 try :
     mongo_client = MongoClient(mongo_uri)
     db = mongo_client.nyc_open_data
-except :
+except Exception as e:
     print(f"Could not connect to MongoDB: {e}")
     exit() 
 
 collection = db.Complaints
 
-try :
-    result = collection.delete_many({}) # Clear out previous data
-    print(f"Deleted {result.deleted_count} documents.")
+try:
+    # Ensure there's no conflicting geo index and create a 2dsphere index for GeoJSON Points
+    try:
+        # Drop any index that references 'location' (safe on new collection)
+        for idx in collection.list_indexes():
+            if 'location' in "".join([k for k in idx.get('key', {}).keys()]):
+                collection.drop_index(idx['name'])
+    except Exception as idx_err:
+        # ignore if no indexes or drop fails for some reason
+        print(f"Ignoring index drop error: {idx_err}")
 
-    result = collection.insert_many(cleaned_data_to_insert)
-    print(f"Successfully inserted {len(result.inserted_ids)} documents into 'nypd_complaints' collection.")
-except :
+    collection.create_index([("location", "2dsphere")])
+    print("Ensured 2dsphere index on 'location'.")
+
+    # Safety: don't try to insert an empty list (avoids confusing errors)
+    if not cleaned_data_to_insert:
+        print("No cleaned documents to insert. Exiting.")
+    else:
+        result = collection.delete_many({})  # Clear out previous data
+        print(f"Deleted {result.deleted_count} documents.")
+
+        result = collection.insert_many(cleaned_data_to_insert)
+        print(f"Successfully inserted {len(result.inserted_ids)} documents into 'Complaints' collection.")
+except Exception as e:
     print(f"Error inserting documents into MongoDB: {e}")
-
+    
 doc_count = collection.count_documents({})
 print(f"Total documents now in 'complaints' collection: {doc_count}")
 
