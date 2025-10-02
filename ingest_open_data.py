@@ -11,7 +11,8 @@ dataset_id = "erm2-nwe9"
 
 soql = {
     "$select": "unique_key, created_date, complaint_type, location_type, descriptor, incident_zip, incident_address, city, borough, latitude, longitude",
-    "$where": "created_date >= '2024-06-01T00:00:00' ",
+    # Only include records on/after 2024-06-01 and where complaint_type mentions Noise or Loud (case-insensitive)
+    "$where": "created_date >= '2024-06-01T00:00:00' AND complaint_type IS NOT NULL AND (upper(complaint_type) LIKE '%NOISE%' OR upper(complaint_type) LIKE '%LOUD%')",
     "$limit": 50000 # Always include a limit, even with filters
 }
 
@@ -79,7 +80,7 @@ try:
         print(f"Successfully inserted {len(result.inserted_ids)} documents into 'Complaints' collection.")
 except Exception as e:
     print(f"Error inserting documents into MongoDB: {e}")
-    
+
 doc_count = collection.count_documents({})
 print(f"Total documents now in 'complaints' collection: {doc_count}")
 

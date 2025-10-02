@@ -121,7 +121,7 @@ class NYCAddressValidator {
 
     async geocodeAddress(address) {
         const encodedAddress = encodeURIComponent(address);
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=AIzaSyDbkBr75zujUpvYSiaQ8wYBVuIeAL-zunU`;
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${this.GOOGLE_MAPS_API_KEY}`;
 
         try {
             const response = await fetch(url);

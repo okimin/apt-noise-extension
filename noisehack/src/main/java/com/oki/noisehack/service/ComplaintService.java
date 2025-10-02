@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.geo.*;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,6 +24,9 @@ public class ComplaintService {
         Distance distance = new Distance(distanceInKm, Metrics.KILOMETERS); // Or Metrics.MILES, etc.
 
         List<Complaints> results = complaintsRepository.findByLocationNear(center, distance);
-        return results;
+        return results.stream()
+                .sorted(Comparator.comparing(Complaints::getCreatedDate).reversed())
+                .collect(Collectors.toList());
+
     }
 }
