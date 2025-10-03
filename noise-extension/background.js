@@ -34,7 +34,7 @@ class NYCAddressValidator {
      async initializeApiKey() {
         try {
       // First, try to get API key from chrome storage (e.g., if user set it or it was saved before)
-            const result = await chrome.storage.sync.get(['googleMapsApKey']);
+            const result = await chrome.storage.sync.get(['googleMapsApiKey']);
             
             if (result.googleMapsApiKey) {
                 this.GOOGLE_MAPS_API_KEY = result.googleMapsApiKey;
@@ -42,7 +42,7 @@ class NYCAddressValidator {
                 return;
             }
 
-            const apiUrl = `http://localhost:8080/api/mapKey`; // Replace with your actual API endpoint
+            const apiUrl = `https://noisehack-service-730559099669.us-east1.run.app/api/mapKey`; // Replace with your actual API endpoint
             const response = await fetch(apiUrl);
             if (!response.ok) {
                 throw new Error(`Api key not retrieved: ${response.status} statusText: ${response.statusText}`);
@@ -122,6 +122,7 @@ class NYCAddressValidator {
     async geocodeAddress(address) {
         const encodedAddress = encodeURIComponent(address);
         const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${this.GOOGLE_MAPS_API_KEY}`;
+        console.log('Geocoding URL:', url);
 
         try {
             const response = await fetch(url);

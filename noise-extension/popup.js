@@ -221,8 +221,8 @@ class PopupController {
     }
 
     async fetchComplaints(latitude, longitude) {
-        const distanceInKm = 1; 
-        const apiUrl = `http://localhost:8080/api/near?lon=${longitude}&lat=${latitude}&distanceInKm=${distanceInKm}`;
+        const distanceInKm = .5; // 500 meters
+        const apiUrl = `https://noisehack-service-730559099669.us-east1.run.app/api/near?lon=${longitude}&lat=${latitude}&distanceInKm=${distanceInKm}`;
         try {
             const response = await fetch(apiUrl);
             if (!response.ok) {
