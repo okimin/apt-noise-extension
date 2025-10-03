@@ -8,13 +8,13 @@ The intended audience is for apartment hunters to guage the safety and noise qua
 - SpringBoot
 - MongoDB
 - Google Maps Api
-- Google Vertex (To be Implemented)
 
 ## Current Features Done
 - [x] Ingested data from OpenDataNYC to MongoDB
 - [x] Created browser extension to take in address and determine if they are an address in NYC
 - [x] Created Springboot application to get nearest complaints from a given coordinate
+- [x] Connect Chrome extension to MongoDB and get location of complaints on maps
+- [x] Deploy Springboot to Google Cloud Run and submitted extension for review 
 
 ## To be done
-- [ ] Connect Chrome extension to MongoDB and get location of complaints on maps
 - [ ] Generate summary of complaints with Google Gemini
