@@ -14,7 +14,14 @@ The intended audience is for apartment hunters to guage the safety and noise qua
 - [x] Created browser extension to take in address and determine if they are an address in NYC
 - [x] Created Springboot application to get nearest complaints from a given coordinate
 - [x] Connect Chrome extension to MongoDB and get location of complaints on maps
-- [x] Deploy Springboot to Google Cloud Run and submitted extension for review 
+- [x] Deploy Springboot to Google Cloud Run and submitted extension for review
+
+Screenshot of Application
+<img width="351" height="324" alt="Screenshot 2025-10-03 at 1 18 29 PM" src="https://github.com/user-attachments/assets/e15d11f2-ad14-441a-8d2a-5bb3d223438b" />
+
+<img width="1094" height="693" alt="Screenshot 2025-10-03 at 1 19 18 PM" src="https://github.com/user-attachments/assets/ccc536d1-0d31-4db2-8ad9-a90d62ee9e01" />
+
+
 
 ## To be done
 - [ ] Generate summary of complaints with Google Gemini
