@@ -3,6 +3,7 @@ package com.oki.noisehack.controller;
 import com.oki.noisehack.entity.Complaints;
 import com.oki.noisehack.service.ComplaintService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,8 @@ import java.util.List;
 @RequestMapping(path = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ComplaintsController {
 
+    @Value("${MAPS_API_KEY}")
+    private String mapKey;
 
     private final ComplaintService complaintService;
 
@@ -33,5 +36,11 @@ public class ComplaintsController {
         List<Complaints> complaints = complaintService.findLocationsNear(lon, lat, distanceInKm);
         return new ResponseEntity<>(complaints, HttpStatus.OK);
     }
+
+    @GetMapping("/mapKey")
+    public ResponseEntity<String> getMapKey() {
+        return new ResponseEntity<>(mapKey, HttpStatus.OK);
+    }
+
 
 }

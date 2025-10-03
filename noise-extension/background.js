@@ -38,22 +38,21 @@ class NYCAddressValidator {
             
             if (result.googleMapsApiKey) {
                 this.GOOGLE_MAPS_API_KEY = result.googleMapsApiKey;
-                console.log('API key loaded from storage.');
+                console.log('API key loaded from storage.' + ' Key length: ' + this.GOOGLE_MAPS_API_KEY.length);
                 return;
             }
 
-            // Fallback: Use the key from the local config.js file (developer's key)
-            // This assumes config.js is properly excluded from version control for security.
-            if (CONFIG && CONFIG.GOOGLE_MAPS_API_KEY && CONFIG.GOOGLE_MAPS_API_KEY !== "YOUR_API_KEY_HERE") {
-                this.GOOGLE_MAPS_API_KEY = CONFIG.GOOGLE_MAPS_API_KEY;
-                
-                // Optionally store in chrome storage for future use to avoid repeated config file checks
-                await chrome.storage.sync.set({ googleMapsApiKey: this.GOOGLE_MAPS_API_KEY });
-                console.log('API key loaded from config file and stored for future use.');
-            } else {
-                console.warn('API key not found in storage and not properly set in config.js. Please update config.js or extension options.');
-                // You might want to throw an error or disable functionality if key is missing
+            const apiUrl = `https://noisehack-service-730559099669.us-east1.run.app/api/mapKey`; // Replace with your actual API endpoint
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(`Api key not retrieved: ${response.status} statusText: ${response.statusText}`);
             }
+
+            const data = (await response.text()).trim();
+            console.log(data);
+            this.GOOGLE_MAPS_API_KEY = data;
+            await chrome.storage.sync.set({ googleMapsApiKey: this.GOOGLE_MAPS_API_KEY });
+            console.log('API key loaded from remote server.' + ' Key length: ' + this.GOOGLE_MAPS_API_KEY.length);
             
         } catch (error) {
             console.error('Failed to initialize API key:', error);
@@ -123,6 +122,7 @@ class NYCAddressValidator {
     async geocodeAddress(address) {
         const encodedAddress = encodeURIComponent(address);
         const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${this.GOOGLE_MAPS_API_KEY}`;
+        console.log('Geocoding URL:', url);
 
         try {
             const response = await fetch(url);

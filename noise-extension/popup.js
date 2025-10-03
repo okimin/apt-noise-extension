@@ -129,8 +129,22 @@ class PopupController {
         this.resultContent.innerHTML = html;
         
         // Add event listener for map button
-        document.getElementById('showMapBtn').addEventListener('click', () => {
-            this.showLocationOnMap(result);
+        const btn = document.getElementById('showMapBtn');
+        btn.addEventListener('click', async () => {
+            // Put button into loading state
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Loading map...';
+
+            try {
+                await this.showLocationOnMap(result);
+                // On success the popup will close; if it doesn't, restore button
+            } catch (err) {
+                // Restore button state
+                btn.disabled = false;
+                btn.textContent = originalText;
+                this.showError('Failed to open map: ' + (err && err.message ? err.message : 'Unknown error'));
+            }
         });
     }
 
@@ -207,8 +221,8 @@ class PopupController {
     }
 
     async fetchComplaints(latitude, longitude) {
-        const distanceInKm = 1; 
-        const apiUrl = `http://localhost:8080/api/near?lon=${longitude}&lat=${latitude}&distanceInKm=${distanceInKm}`;
+        const distanceInKm = .5; // 500 meters
+        const apiUrl = `https://noisehack-service-730559099669.us-east1.run.app/api/near?lon=${longitude}&lat=${latitude}&distanceInKm=${distanceInKm}`;
         try {
             const response = await fetch(apiUrl);
             if (!response.ok) {
@@ -253,19 +267,24 @@ class PopupController {
             
             while (attempts < maxAttempts) {
                 try {
-                    await chrome.tabs.sendMessage(tab.id, {
+                    // Send message and wait for content script to confirm map loaded
+                    const response = await chrome.tabs.sendMessage(tab.id, {
                         action: 'showLocationMap',
                         data: {
                             address: result.formattedAddress,
                             coordinates: result.coordinates,
-                            borough: result.borough
-                            ,complaints : complaints
+                            borough: result.borough,
+                            complaints: complaints
                         }
                     });
 
-                    // Close popup after successful map display
-                    window.close();
-                    return;
+                    if (response && response.success) {
+                        // Close popup after successful map display
+                        window.close();
+                        return;
+                    } else {
+                        throw new Error(response && response.error ? response.error : 'Content script failed to initialize map');
+                    }
                 } catch (error) {
                     attempts++;
                     if (attempts < maxAttempts) {

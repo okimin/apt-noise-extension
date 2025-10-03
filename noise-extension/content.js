@@ -10,23 +10,39 @@ class MapOverlay {
     initializeMessageListener() {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (message.action === 'showLocationMap') {
-                this.showMap(message.data);
-                sendResponse({ success: true });
+                // Defer sendResponse until the overlay/map has actually loaded
+                this.showMap(message.data, sendResponse);
+                // Tell Chrome we'll call sendResponse asynchronously
+                return true;
             }
+
             return true;
         });
     }
 
-    async showMap(data) {
+    async showMap(data, sendResponse) {
         if (this.isVisible) {
             this.hideMap();
         }
 
         try {
+            // createMapOverlay will await initialization of the static map (image load)
             await this.createMapOverlay(data);
             this.isVisible = true;
+
+            // Notify sender that the map is visible
+            try {
+                sendResponse && sendResponse({ success: true });
+            } catch (e) {
+                console.warn('Failed to send success response to sender:', e);
+            }
         } catch (error) {
             console.error('Failed to show map overlay:', error);
+            try {
+                sendResponse && sendResponse({ success: false, error: error.message });
+            } catch (e) {
+                console.warn('Failed to send error response to sender:', e);
+            }
         }
     }
 
@@ -39,8 +55,9 @@ class MapOverlay {
         // Add to page
         document.body.appendChild(this.overlay);
 
-        // Initialize map - use static map instead of interactive due to CSP restrictions
-        this.initializeStaticMap(data.coordinates, data.complaints);
+    // Initialize map - use static map instead of interactive due to CSP restrictions
+    // Wait for the static map to load or error before returning
+    await this.initializeStaticMap(data.coordinates, data.complaints);
 
         // Add event listeners
         this.addOverlayEventListeners();
@@ -68,39 +85,34 @@ class MapOverlay {
                             <small>📍 ${data.coordinates.lat.toFixed(6)}, ${data.coordinates.lng.toFixed(6)}</small>
                         </div>
                     </div>
-                    <div class="map-container">
-                        <div id="map" style="width: 100%; height: 300px; border-radius: 8px; position: relative; overflow: hidden;">
-                            <div class="map-loading">
-                                <div class="loading-spinner"></div>
-                                <span>Loading map...</span>
+                    <!-- Body: map and complaints side-by-side on wide screens -->
+                    <div class="overlay-body">
+                        <div class="map-container">
+                            <div id="map" style="width: 100%; height: 100%; border-radius: 8px; position: relative; overflow: hidden;">
+                                <div class="map-loading">
+                                    <div class="loading-spinner"></div>
+                                    <span>Loading map...</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="complaints-list-container">
-                    <h3>Nearby Complaints</h3>
-                    <ul class="complaints-list">
-                        ${data.complaints.length > 0 ?
-                data.complaints.slice(0,10).map(complaint => `
-                                <li>
-                                    <strong>Type:</strong> ${complaint.complaintType} <br>
-                                    <strong>Date:</strong> ${new Date(complaint.createdDate).toLocaleDateString()} <br>
-                                    <strong>Address:</strong> ${complaint.incidentAddress || 'N/A'}, ${complaint.city || 'N/A'}
-                                </li>
-                            `).join('')
-                : '<li>No nearby complaints found within 1 km.</li>'
-            }
-                    </ul>
-                </div>
-                    <div class="overlay-actions">
-                        <button class="action-btn" id="getDirections">
-                            🗺️ Get Directions
-                        </button>
-                        <button class="action-btn" id="openGoogleMaps">
-                            🌐 Open in Google Maps
-                        </button>
-                        <button class="action-btn secondary" id="copyAddress">
-                            📋 Copy Address
-                        </button>
+
+                        <div class="complaints-list-container">
+                            <h3>Nearby Complaints</h3>
+                            <div class="complaints-list-wrapper">
+                                <ul class="complaints-list">
+                                    ${data.complaints.length > 0 ?
+                                        data.complaints.slice(0, 50).map(complaint => `
+                                            <li class="complaint-item">
+                                                <div class="complaint-type"><strong>Type:</strong> ${complaint.complaintType}</div>
+                                                <div class="complaint-date"><strong>Date:</strong> ${new Date(complaint.createdDate).toLocaleDateString()}</div>
+                                                <div class="complaint-address"><strong>Address:</strong> ${complaint.incidentAddress || 'N/A'}, ${complaint.city || 'N/A'}</div>
+                                            </li>
+                                        `).join('')
+                                        : '<li class="no-complaints">No nearby complaints found within 1 km.</li>'
+                                    }
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -108,19 +120,26 @@ class MapOverlay {
     }
 
     async initializeStaticMap(coordinates, complaints = []) {
+        return new Promise(async (resolve, reject) => {
         try {
             // Get Google Maps API key from background script
             const response = await chrome.runtime.sendMessage({ action: 'getApiKey' });
             const apiKey = response.apiKey;
             console.log(coordinates)
-            console.log(complaints[0])
+            console.log(complaints.length)
 
-            let markers = `&markers=color:blue|label:A|${coordinates.lat},${coordinates.lng}`;
+            // Build markers as an array of marker definitions (avoid embedding raw '&' characters)
+            const markers = [];
+            markers.push(`color:blue|label:A|${coordinates.lat},${coordinates.lng}`);
 
-            // Add markers for complaints
-            for(let x = 0; x < complaints.length; x++){
-                if(complaints[x].latitude && complaints.longitude){
-                    markers += `&markers=color:red|label:${x + 1}|${complaints[x].latitude},${complaints.longitude}`;
+            // Add markers for complaints (safely, only when coords exist)
+            if (Array.isArray(complaints) && complaints.length > 0) {
+                const maxMarkers = Math.min(30, complaints.length);
+                for (let x = 0; x < maxMarkers; x++) {
+                    const c = complaints[x];
+                    if (c && c.latitude != null && c.longitude != null) {
+                        markers.push(`color:red|label:${x + 1}|${c.latitude},${c.longitude}`);
+                    }
                 }
             }
             // complaints.forEach((complaint, index) => {
@@ -130,6 +149,7 @@ class MapOverlay {
             //     }
             // });
 
+            console.log(markers);
             // Create static map URL with custom marker
             const mapUrl = this.createStaticMapUrl(coordinates, markers, apiKey);
 
@@ -162,36 +182,67 @@ class MapOverlay {
             });
 
             // Handle image load
+            // Handle image load
             mapImg.addEventListener('load', () => {
                 mapElement.innerHTML = '';
                 mapElement.appendChild(mapImg);
 
                 // Add overlay controls
-                this.addMapOverlayControls(mapElement, coordinates);
+                //this.addMapOverlayControls(mapElement, coordinates);
+
+                // Resolve the create/initialization promise so callers know the map is visible
+                resolve(true);
             });
 
-            // Handle image error
-            mapImg.addEventListener('error', () => {
+            // Handle image error (capture event data to log network/load errors)
+            mapImg.addEventListener('error', (evt) => {
+                console.error('Failed to load static map image', evt);
                 this.showMapError(mapElement);
+                reject(new Error('Failed to load static map image'));
             });
+
+            // Also add a timeout in case the image never fires load/error
+            const timeoutMs = 10000; // 10s
+            const timeoutId = setTimeout(() => {
+                console.error('Static map load timed out');
+                this.showMapError(mapElement);
+                reject(new Error('Static map load timed out'));
+            }, timeoutMs);
+
+            // Clear timeout on resolution/rejection
+            const clearHandlers = () => clearTimeout(timeoutId);
+            mapImg.addEventListener('load', clearHandlers, { once: true });
+            mapImg.addEventListener('error', clearHandlers, { once: true });
 
         } catch (error) {
             console.error('Failed to initialize static map:', error);
             this.showMapError(document.getElementById('map'));
+            // Ensure the promise is rejected so callers can handle the error
+            reject(error);
         }
+        });
     }
 
-    createStaticMapUrl(coordinates, apiKey) {
+    createStaticMapUrl(coordinates, markers, apiKey) {
         const baseUrl = 'https://maps.googleapis.com/maps/api/staticmap';
         const params = new URLSearchParams({
             center: `${coordinates.lat},${coordinates.lng}`,
             zoom: '16',
-            size: '400x300',
+            size: '800x600',
             maptype: 'roadmap',
-            markers,
             style: 'feature:poi|visibility:simplified',
             key: apiKey
         });
+
+        // markers can be an array of marker definitions. Append each as its own 'markers' param.
+        if (Array.isArray(markers)) {
+            for (const m of markers) {
+                params.append('markers', m);
+            }
+        } else if (markers) {
+            // legacy support: single string
+            params.append('markers', markers);
+        }
 
         return `${baseUrl}?${params.toString()}`;
     }
@@ -213,8 +264,8 @@ class MapOverlay {
 
         mapElement.appendChild(controlsDiv);
 
-        // Add event listeners for controls
-        this.addMapControlListeners(coordinates);
+        // // Add event listeners for controls
+        // this.addMapControlListeners(coordinates);
     }
 
     addMapControlListeners(coordinates) {
@@ -256,7 +307,7 @@ class MapOverlay {
             const params = new URLSearchParams({
                 center: `${coordinates.lat},${coordinates.lng}`,
                 zoom: zoom.toString(),
-                size: '400x300',
+                size: '800x600',
                 maptype: mapType,
                 markers: `color:red|size:mid|${coordinates.lat},${coordinates.lng}`,
                 key: apiKey
@@ -324,31 +375,31 @@ class MapOverlay {
             }
         });
 
-        // Get directions button
-        document.getElementById('getDirections').addEventListener('click', () => {
-            const address = document.querySelector('.address-text strong').textContent;
-            const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
-            window.open(url, '_blank');
-        });
+        // // Get directions button
+        // document.getElementById('getDirections').addEventListener('click', () => {
+        //     const address = document.querySelector('.address-text strong').textContent;
+        //     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+        //     window.open(url, '_blank');
+        // });
 
-        // Open in Google Maps button
-        document.getElementById('openGoogleMaps').addEventListener('click', () => {
-            const address = document.querySelector('.address-text strong').textContent;
-            const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-            window.open(url, '_blank');
-        });
+        // // Open in Google Maps button
+        // document.getElementById('openGoogleMaps').addEventListener('click', () => {
+        //     const address = document.querySelector('.address-text strong').textContent;
+        //     const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+        //     window.open(url, '_blank');
+        // });
 
-        // Copy address button
-        document.getElementById('copyAddress').addEventListener('click', () => {
-            const address = document.querySelector('.address-text strong').textContent;
-            navigator.clipboard.writeText(address).then(() => {
-                this.showCopyConfirmation();
-            }).catch(err => {
-                console.error('Failed to copy address:', err);
-                // Fallback for older browsers
-                this.fallbackCopyTextToClipboard(address);
-            });
-        });
+        // // Copy address button
+        // document.getElementById('copyAddress').addEventListener('click', () => {
+        //     const address = document.querySelector('.address-text strong').textContent;
+        //     navigator.clipboard.writeText(address).then(() => {
+        //         this.showCopyConfirmation();
+        //     }).catch(err => {
+        //         console.error('Failed to copy address:', err);
+        //         // Fallback for older browsers
+        //         this.fallbackCopyTextToClipboard(address);
+        //     });
+        // });
     }
 
     openInGoogleMaps(coordinates) {
@@ -433,9 +484,12 @@ style.textContent = `
         background: white;
         border-radius: 12px;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        max-width: 500px;
-        width: 90%;
-        max-height: 90vh;
+        /* Larger default size for desktop */
+        max-width: 1100px;
+        width: 95%;
+        max-height: 92vh;
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
         animation: slideIn 0.3s ease-out;
     }
@@ -504,18 +558,80 @@ style.textContent = `
     #nyc-address-validator-overlay .map-container {
         padding: 20px;
         position: relative;
+        flex: 1 1 auto; /* let map expand to fill available space */
+    }
+
+    #nyc-address-validator-overlay .overlay-body {
+        display: flex;
+        gap: 16px;
+        align-items: stretch;
+        padding: 0 20px 20px 20px;
+        flex: 1 1 auto; /* take remaining vertical space */
+        /* place map on the right and complaints on the left */
+        flex-direction: row-reverse;
+    }
+
+    #nyc-address-validator-overlay .complaints-list-container {
+        width: 360px;
+        max-height: calc(92vh - 180px);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.06);
+        padding: 12px;
+    }
+
+    #nyc-address-validator-overlay .complaints-list-wrapper {
+        overflow-y: auto;
+        padding-right: 8px; /* room for scrollbar */
+    }
+
+    #nyc-address-validator-overlay .complaints-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #nyc-address-validator-overlay .complaint-item {
+        padding: 8px;
+        border-radius: 6px;
+        background: #f7f9fc;
+        font-size: 13px;
+        color: #333;
+    }
+
+    #nyc-address-validator-overlay .complaint-item .complaint-type {
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    #nyc-address-validator-overlay .no-complaints {
+        padding: 8px;
+        color: #666;
     }
 
     #nyc-address-validator-overlay .map-loading {
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 300px;
+        height: 100%;
         background: #f8f9fa;
         border-radius: 8px;
         color: #666;
         flex-direction: column;
         gap: 10px;
+    }
+
+    /* Ensure the map element fills available height inside the overlay */
+    #nyc-address-validator-overlay #map {
+        width: 100%;
+        height: 100%;
+        min-height: 320px;
     }
 
     #nyc-address-validator-overlay .loading-spinner {
@@ -681,9 +797,20 @@ style.textContent = `
         #nyc-address-validator-overlay .map-container {
             padding: 15px;
         }
-        
+
         #nyc-address-validator-overlay #map {
-            height: 250px !important;
+            height: 280px !important;
+        }
+        /* On small screens stack body vertically */
+        #nyc-address-validator-overlay .overlay-body {
+            flex-direction: column-reverse;
+            gap: 12px;
+            padding: 0 15px 15px 15px;
+        }
+
+        #nyc-address-validator-overlay .complaints-list-container {
+            width: 100%;
+            max-height: 220px;
         }
     }
 
